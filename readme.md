@@ -93,10 +93,28 @@ python src/embedding_agent.py <raw_dir> <summary_dir> \
     [--no-recursive] [--no-skip]
 ```
 
+### `ontology_agent.py` — Агент онтологии
+
+Агент для извлечения сущностей и связей из документов с построением графа знаний.
+
+**Функционал:**
+- Извлечение текста через MarkItDown (PDF, DOCX, XLSX, PPTX, CSV, JSON, XML, HTML)
+- Рекурсивное сканирование каталогов
+- Идентификация сущностей и их взаимосвязей через LLM
+- Построение структурированной онтологии (JSON формат)
+- Пропуск уже обработанных файлов
+
+**CLI:**
+```bash
+python src/ontology_agent.py <input_dir> <output_dir> \
+    --model qwen3.6-40b-claude-4.6-opus-deckard-heretic-uncensored-thinking-neo-code-di-imatrix-max \
+    [--no-recursive] [--no-skip]
+```
+
 ## Зависимости
 
 ```bash
-pip install openai requests markitdown chromadb
+pip install openai requests markitdown chromadb networkx pyvis
 ```
 
 ## Предварительные требования
@@ -118,4 +136,7 @@ python src/document_agent.py ./data/docs ./summaries/docs/
 
 # 3. Создание эмбеддингов для семантического поиска
 python src/embedding_agent.py ./data/docs ./summaries/docs/
+
+# 4. Построение онтологии (графа знаний)
+python src/ontology_agent.py ./data/docs ./summaries/ontology/
 ```
