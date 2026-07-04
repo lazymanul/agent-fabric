@@ -41,11 +41,12 @@ class ValidationGameEngine:
         # Подсчет итогов
         self._calculate_final_score(hypothesis)
         
-        # Генерация рекомендаций
+        # ✅ ИСПРАВЛЕНО: передаём hypothesis (а не будущий result)
         recommendations = self._generate_recommendations(hypothesis)
         roadmap = self._generate_roadmap(hypothesis)
         risks = self._generate_risks(hypothesis)
         
+        # Теперь создаём ValidationResult
         result = ValidationResult(
             hypothesis=hypothesis,
             game_log=self.game_log,
@@ -59,7 +60,6 @@ class ValidationGameEngine:
     
     def _round_1_fact_checking(self, hypothesis: Hypothesis):
         """Раунд 1: Декомпозиция и проверка фактов"""
-        # Декомпозиция гипотезы
         claim_texts = self.llm.decompose_hypothesis(hypothesis.description)
         
         for i, text in enumerate(claim_texts, 1):
@@ -71,11 +71,9 @@ class ValidationGameEngine:
             
             print(f"\n📋 Claim {i}: {text}")
             
-            # Поиск доказательств
             evidence_list = self.evidence_finder.find_evidence(text)
             claim.evidence = evidence_list
             
-            # Оценка утверждения
             if evidence_list:
                 avg_confidence = sum(e.confidence for e in evidence_list) / len(evidence_list)
                 if avg_confidence >= 0.9:
@@ -97,7 +95,6 @@ class ValidationGameEngine:
                 claim.points_earned = 0
                 print(f"   ❌ НЕТ ДОКАЗАТЕЛЬСТВ")
             
-            # Вывод найденных доказательств
             for ev in evidence_list:
                 print(f"   🔍 {ev.snippet[:80]}...")
             
@@ -118,7 +115,6 @@ class ValidationGameEngine:
         """Раунд 2: Контраргументы и защита"""
         for i, claim in enumerate(hypothesis.claims, 1):
             if claim.status in [ClaimStatus.VERIFIED, ClaimStatus.PARTIALLY_VERIFIED]:
-                # Генерация контраргумента
                 counterargument = self.llm.generate_counterargument(claim.text, self.context)
                 
                 challenge = Challenge(
@@ -129,11 +125,10 @@ class ValidationGameEngine:
                 print(f"\n🛡️  Атака на Claim {i}:")
                 print(f"   🔴 {counterargument}")
                 
-                # Генерация возражения
                 rebuttal = self.llm.generate_rebuttal(claim.text, counterargument, self.context)
                 challenge.defense_text = rebuttal
                 challenge.resolved = True
-                challenge.points_delta = -3  # Штраф за необходимость адаптации, но +5 за защиту
+                challenge.points_delta = 2
                 
                 print(f"   🟢 Защита: {rebuttal[:80]}...")
                 print(f"   📊 Очки: -3 (адаптация) +5 (защита) = +2")
@@ -167,10 +162,10 @@ class ValidationGameEngine:
         else:
             hypothesis.status = HypothesisStatus.REJECTED
     
-    def _generate_recommendations(self, result: ValidationResult) -> List[str]:
+    # ✅ ИСПРАВЛЕНО: принимаем Hypothesis, а не ValidationResult
+    def _generate_recommendations(self, hypothesis: Hypothesis) -> List[str]:
         """Генерирует рекомендации по результатам игры"""
         recommendations = []
-        hypothesis = result.hypothesis
         
         if hypothesis.status == HypothesisStatus.APPROVED_FOR_PILOT:
             recommendations.append("Гипотеза готова к пилотным испытаниям на одном из потоков.")
@@ -179,6 +174,8 @@ class ValidationGameEngine:
             recommendations.append("Гипотеза одобрена, но требует дополнительных лабораторных испытаний.")
         elif hypothesis.status == HypothesisStatus.NEEDS_REVISION:
             recommendations.append("Гипотеза требует доработки. Слабые места выявлены в Раунде 2.")
+        else:
+            recommendations.append("Гипотеза отклонена. Требуется фундаментальный пересмотр подхода.")
         
         # Добавляем рекомендации на основе контраргументов
         for challenge in hypothesis.challenges:
@@ -186,12 +183,16 @@ class ValidationGameEngine:
                 recommendations.append("Подготовить детальный расчет ROI перед внедрением.")
             if "нагрузк" in challenge.attack_text.lower():
                 recommendations.append("Провести аудит текущей загрузки оборудования.")
+            if "грохот" in challenge.attack_text.lower() or "забьются" in challenge.attack_text.lower():
+                recommendations.append("Рассмотреть альтернативу: батарея ГЦМД вместо мокрых грохотов.")
         
         return recommendations
     
-    def _generate_roadmap(self, result: ValidationResult) -> List[Dict]:
+    # ✅ ИСПРАВЛЕНО: принимаем Hypothesis
+    def _generate_roadmap(self, hypothesis: Hypothesis) -> List[Dict]:
         """Генерирует дорожную карту проверки"""
-        return [
+        # Базовая дорожная карта
+        roadmap = [
             {"stage": "Лабораторный", "duration": "2 недели", "tasks": [
                 "Грохо-фракционный анализ проб хвостов",
                 "Минералогический анализ класса -10 мкм"
@@ -207,10 +208,20 @@ class ValidationGameEngine:
                 "Корректировка параметров"
             ]}
         ]
+        
+        # Добавляем специфичные задачи на основе контраргументов
+        for challenge in hypothesis.challenges:
+            if "футеровк" in challenge.attack_text.lower():
+                roadmap[1]["tasks"].append("Плановая замена футеровки во время остановки мельниц")
+            if "скорость" in challenge.attack_text.lower():
+                roadmap[0]["tasks"].append("Лабораторные испытания различных режимов вращения классификаторов")
+        
+        return roadmap
     
-    def _generate_risks(self, result: ValidationResult) -> List[Dict]:
+    # ✅ ИСПРАВЛЕНО: принимаем Hypothesis
+    def _generate_risks(self, hypothesis: Hypothesis) -> List[Dict]:
         """Генерирует оценку рисков"""
-        return [
+        risks = [
             {"risk": "Забивание мокрых грохотов", "probability": "Высокая", "impact": "Крит.",
              "mitigation": "Замена на батарею ГЦМД"},
             {"risk": "Увеличение нагрузки на мельницы", "probability": "Средняя", "impact": "Среднее",
@@ -218,6 +229,18 @@ class ValidationGameEngine:
             {"risk": "Капитальные затраты", "probability": "Высокая", "impact": "Высокое",
              "mitigation": "Расчет ROI на основе возврата потерянного металла"}
         ]
+        
+        # Добавляем специфичные риски на основе контраргументов
+        for challenge in hypothesis.challenges:
+            if "баланс" in challenge.attack_text.lower() or "схем" in challenge.attack_text.lower():
+                risks.append({
+                    "risk": "Нарушение баланса технологической схемы",
+                    "probability": "Средняя",
+                    "impact": "Высокое",
+                    "mitigation": "Поэтапное внедрение с контролем ключевых параметров"
+                })
+        
+        return risks
     
     def _print_final_report(self, result: ValidationResult):
         """Выводит итоговый отчет"""
